@@ -16,7 +16,7 @@ env:
 permissions:
   contents: read
   packages: write
-  
+
 jobs:
   build:
     name: Publish Docker Image
@@ -24,9 +24,8 @@ jobs:
       matrix:
         config:
           - platform: linux/amd64
-            runner: warp-ubuntu-latest-x64-16x
-          - platform: linux/arm64
-            runner: warp-ubuntu-latest-arm64-16x
+            runner: ubuntu-latest
+            
     runs-on: ${{ matrix.config.runner }}
     steps:
       - name: Checkout sources
