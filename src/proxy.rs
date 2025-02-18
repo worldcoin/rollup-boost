@@ -245,6 +245,10 @@ mod tests {
 
     impl TestHarness {
         async fn new() -> eyre::Result<Self> {
+            rustls::crypto::ring::default_provider()
+                .install_default()
+                .unwrap();
+
             let builder = MockHttpServer::serve().await?;
             let l2 = MockHttpServer::serve().await?;
             let middleware = tower::ServiceBuilder::new().layer(ProxyLayer::new(
