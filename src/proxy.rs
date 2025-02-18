@@ -1,5 +1,6 @@
 use http::header::AUTHORIZATION;
 use http::Uri;
+use hyper_rustls::HttpsConnector;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
@@ -54,9 +55,17 @@ impl<S> Layer<S> for ProxyLayer {
     type Service = ProxyService<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
+        let https = hyper_rustls::HttpsConnectorBuilder::new()
+            .with_native_roots()
+            .expect("no native root CA certificates found")
+            .https_or_http()
+            .enable_http1()
+            .enable_http2()
+            .build();
+
         ProxyService {
             inner,
-            client: Client::builder(TokioExecutor::new()).build_http(),
+            client: Client::builder(TokioExecutor::new()).build(https),
             l2_http_uri: self.l2_http_uri.clone(),
             l2_http_secret: self.l2_http_secret,
             builder_http_uri: self.builder_http_uri.clone(),
@@ -68,7 +77,7 @@ impl<S> Layer<S> for ProxyLayer {
 #[derive(Clone)]
 pub struct ProxyService<S> {
     inner: S,
-    client: Client<HttpConnector, HttpBody>,
+    client: Client<HttpsConnector<HttpConnector>, HttpBody>,
     l2_http_uri: Uri,
     l2_http_secret: Option<JwtSecret>,
     builder_http_uri: Uri,
@@ -155,7 +164,7 @@ where
 
 /// Forwards an HTTP request to the `authrpc``, attaching the provided JWT authorization.
 async fn forward_request(
-    client: Client<HttpConnector, HttpBody>,
+    client: Client<HttpsConnector<HttpConnector>, HttpBody>,
     mut req: http::Request<HttpBody>,
     method: &str,
     uri: Uri,
