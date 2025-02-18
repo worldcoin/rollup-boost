@@ -243,12 +243,16 @@ mod tests {
         }
     }
 
+    #[cfg(test)]
+    #[ctor::ctor]
+    fn crypto_ring_init() {
+        rustls::crypto::ring::default_provider()
+            .install_default()
+            .unwrap();
+    }
+
     impl TestHarness {
         async fn new() -> eyre::Result<Self> {
-            rustls::crypto::ring::default_provider()
-                .install_default()
-                .unwrap();
-
             let builder = MockHttpServer::serve().await?;
             let l2 = MockHttpServer::serve().await?;
             let middleware = tower::ServiceBuilder::new().layer(ProxyLayer::new(
