@@ -5220,6 +5220,7 @@ dependencies = [
  "http-body 0.4.6",
  "http-body-util",
  "hyper",
+ "hyper-rustls",
  "hyper-util",
  "jsonrpsee",
  "lru",
