@@ -85,6 +85,9 @@ struct Args {
 async fn main() -> eyre::Result<()> {
     // Load .env file
     dotenv().ok();
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .unwrap();
     let args: Args = Args::parse();
 
     // Initialize logging
