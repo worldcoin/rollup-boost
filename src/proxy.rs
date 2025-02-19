@@ -135,7 +135,7 @@ where
                     let builder_method = method.clone();
                     let l2_req = HttpRequest::from_parts(parts, HttpBody::from(body_bytes));
 
-                    info!(target: "proxy::call", message = "proxying request to rollup-boost server", ?method);
+                    info!(target: "proxy::call", message = "proxying request to l2 client & builder", ?method);
 
                     // If `sendRawTransaction` or `sendRawTransactionConditional` wait for the builders response.
                     // as the response could be a PBH transaction validation error that needs to be returned to the client.
