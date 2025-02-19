@@ -133,21 +133,43 @@ where
                     let builder_req =
                         HttpRequest::from_parts(parts.clone(), HttpBody::from(body_bytes.clone()));
                     let builder_method = method.clone();
+                    let l2_req = HttpRequest::from_parts(parts, HttpBody::from(body_bytes));
 
-                    tokio::spawn(async move {
-                        let _ = forward_request(
+                    info!(target: "proxy::call", message = "proxying request to rollup-boost server", ?method);
+
+                    // If `sendRawTransaction` or `sendRawTransactionConditional` wait for the builders response.
+                    // as the response could be a PBH transaction validation error that needs to be returned to the client.
+                    if method.as_str() == "eth_sendRawTransaction"
+                        || method.as_str() == "eth_sendRawTransactionConditional"
+                    {
+                        tokio::spawn(async move {
+                            let _ =
+                                forward_request(client, l2_req, &method, l2_uri.clone(), l2_secret)
+                                    .await;
+                        });
+
+                        forward_request(
                             builder_client,
                             builder_req,
                             &builder_method,
-                            builder_uri,
+                            builder_uri.clone(),
                             builder_secret,
                         )
-                        .await;
-                    });
+                        .await
+                    } else {
+                        tokio::spawn(async move {
+                            let _ = forward_request(
+                                builder_client,
+                                builder_req,
+                                &builder_method,
+                                builder_uri,
+                                builder_secret,
+                            )
+                            .await;
+                        });
 
-                    let l2_req = HttpRequest::from_parts(parts, HttpBody::from(body_bytes));
-                    info!(target: "proxy::call", message = "proxying request to rollup-boost server", ?method);
-                    forward_request(client, l2_req, &method, l2_uri, l2_secret).await
+                        forward_request(client, l2_req, &method, l2_uri, l2_secret).await
+                    }
                 } else {
                     let req = HttpRequest::from_parts(parts, HttpBody::from(body_bytes));
                     info!(target: "proxy::call", message = "proxying request to rollup-boost server", ?method);
