@@ -144,15 +144,14 @@ where
                     {
                         tokio::spawn(async move {
                             let _ =
-                                forward_request(client, l2_req, &method, l2_uri.clone(), l2_secret)
-                                    .await;
+                                forward_request(client, l2_req, &method, l2_uri, l2_secret).await;
                         });
 
                         forward_request(
                             builder_client,
                             builder_req,
                             &builder_method,
-                            builder_uri.clone(),
+                            builder_uri,
                             builder_secret,
                         )
                         .await
