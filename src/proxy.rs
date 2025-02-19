@@ -137,7 +137,7 @@ where
 
                     info!(target: "proxy::call", message = "proxying request to l2 client & builder", ?method);
 
-                    // If `sendRawTransaction` or `sendRawTransactionConditional` wait for the builders response.
+                    // If `sendRawTransaction` or `sendRawTransactionConditional` return the builders response.
                     // as the response could be a PBH transaction validation error that needs to be returned to the client.
                     if method.as_str() == "eth_sendRawTransaction"
                         || method.as_str() == "eth_sendRawTransactionConditional"
