@@ -7,8 +7,7 @@ use alloy_rpc_types_engine::{
 };
 use jsonrpsee::http_client::{transport::HttpBackend, HttpClient};
 use jsonrpsee::proc_macros::rpc;
-use op_alloy_rpc_types_engine::OpExecutionPayloadEnvelopeV3;
-use reth_optimism_payload_builder::OpPayloadAttributes;
+use op_alloy_rpc_types_engine::{OpExecutionPayloadEnvelopeV3, OpPayloadAttributes};
 use reth_rpc_layer::{AuthClientLayer, AuthClientService, JwtSecret};
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
@@ -520,8 +519,8 @@ impl<'a> SimpleBlockGenerator<'a> {
                         timestamp: self.timestamp + 1000, // 1 second later
                         prev_randao: B256::ZERO,
                         suggested_fee_recipient: Default::default(),
-                        target_blobs_per_block: None,
-                        max_blobs_per_block: None,
+                        // target_blobs_per_block: None,
+                        // max_blobs_per_block: None,
                     },
                     transactions: None,
                     no_tx_pool: Some(false),
