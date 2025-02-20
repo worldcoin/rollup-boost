@@ -35,16 +35,17 @@ reth-optimism-payload-builder = { git = "https://github.com/paradigmxyz/reth.git
     "optimism",
 ] }
 reth-payload-primitives = { git = "https://github.com/paradigmxyz/reth.git", rev = "e022b6fd92a33cd44e3ae51ee2fc2ecc0f773222" }
-opentelemetry = { version = "0.26.0", features = ["trace"] }
-opentelemetry-http = "0.26.0"
-opentelemetry-otlp = { version = "0.26.0", features = [
+opentelemetry = { version = "0.28.0", features = ["trace"] }
+opentelemetry-http = "0.28.0"
+opentelemetry-otlp = { version = "0.28.0", features = [
     "http-proto",
     "http-json",
     "reqwest-client",
     "trace",
+    "grpc-tonic",
 ] }
-opentelemetry_sdk = { version = "0.26.0", features = ["rt-tokio"] }
-tracing-opentelemetry = "0.27.0"
+opentelemetry_sdk = { version = "0.28.0", features = ["rt-tokio"] }
+tracing-opentelemetry = "0.29.0"
 futures = "0.3.31"
 metrics-derive = "0.1"
 metrics = "0.24.0"

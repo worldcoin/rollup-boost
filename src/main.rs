@@ -13,9 +13,9 @@ use jsonrpsee::RpcModule;
 use metrics::ServerMetrics;
 use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
 use metrics_util::layers::{PrefixLayer, Stack};
-use opentelemetry::global;
+use opentelemetry::{global, KeyValue};
 use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::{propagation::TraceContextPropagator, trace::Config, Resource};
+use opentelemetry_sdk::{propagation::TraceContextPropagator, Resource};
 use proxy::ProxyLayer;
 use server::RollupBoostServer;
 
@@ -203,25 +203,27 @@ async fn main() -> eyre::Result<()> {
 
 fn init_tracing(endpoint: &str) {
     global::set_text_map_propagator(TraceContextPropagator::new());
-    let provider = opentelemetry_otlp::new_pipeline()
-        .tracing()
-        .with_exporter(
-            opentelemetry_otlp::new_exporter()
-                .tonic()
-                .with_endpoint(endpoint),
-        )
-        .with_trace_config(Config::default().with_resource(Resource::new(vec![
-            opentelemetry::KeyValue::new("service.name", "rollup-boost"),
-        ])))
-        .install_batch(opentelemetry_sdk::runtime::Tokio);
-    match provider {
-        Ok(provider) => {
-            let _ = global::set_tracer_provider(provider);
-        }
+    let otlp_exporter = match opentelemetry_otlp::SpanExporter::builder()
+        .with_tonic()
+        .with_endpoint(endpoint)
+        .build()
+    {
+        Ok(exporter) => exporter,
         Err(e) => {
-            error!(message = "failed to initiate tracing provider", "error" = %e);
+            error!(message = "Failed to create OTLP span exporter", error = %e);
+            return;
         }
-    }
+    };
+
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+        .with_batch_exporter(otlp_exporter)
+        .with_resource(
+            Resource::builder_empty()
+                .with_attributes([KeyValue::new("service.name", "rollup-boost")])
+                .build(),
+        )
+        .build();
+    let _ = global::set_tracer_provider(provider);
 }
 
 async fn init_metrics_server(addr: SocketAddr, handle: PrometheusHandle) -> eyre::Result<()> {
