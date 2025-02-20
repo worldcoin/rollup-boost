@@ -844,9 +844,11 @@ mod tests {
         // wait for builder to observe the FCU call
         sleep(std::time::Duration::from_millis(100)).await;
 
-        let builder_fcu_req = builder_mock.fcu_requests.lock().unwrap();
-        assert_eq!(builder_fcu_req.len(), 1);
-        assert_eq!(l2_mock.fcu_requests.lock().unwrap().len(), 1);
+        {
+            let builder_fcu_req = builder_mock.fcu_requests.lock().unwrap();
+            assert_eq!(builder_fcu_req.len(), 1);
+            assert_eq!(l2_mock.fcu_requests.lock().unwrap().len(), 1);
+        }
 
         // Test getPayload call
         let get_res = test_harness.client.get_payload_v3(same_id).await;
@@ -855,13 +857,17 @@ mod tests {
         // wait for builder to observe the getPayload call
         sleep(std::time::Duration::from_millis(100)).await;
 
-        let builder_gp_reqs = builder_mock.get_payload_requests.lock().unwrap();
-        assert_eq!(builder_gp_reqs.len(), 1);
-        assert_eq!(builder_gp_reqs[0], same_id);
+        {
+            let builder_gp_reqs = builder_mock.get_payload_requests.lock().unwrap();
+            assert_eq!(builder_gp_reqs.len(), 1);
+            assert_eq!(builder_gp_reqs[0], same_id);
+        }
 
-        let local_gp_reqs = l2_mock.get_payload_requests.lock().unwrap();
-        assert_eq!(local_gp_reqs.len(), 1);
-        assert_eq!(local_gp_reqs[0], same_id);
+        {
+            let local_gp_reqs = l2_mock.get_payload_requests.lock().unwrap();
+            assert_eq!(local_gp_reqs.len(), 1);
+            assert_eq!(local_gp_reqs[0], same_id);
+        }
 
         test_harness.cleanup().await;
     }
@@ -904,13 +910,17 @@ mod tests {
         // wait for builder to observe the getPayload call
         sleep(std::time::Duration::from_millis(100)).await;
 
-        let builder_gp = builder_mock.get_payload_requests.lock().unwrap();
-        assert_eq!(builder_gp.len(), 1);
-        assert_eq!(builder_gp[0], external_id);
+        {
+            let builder_gp = builder_mock.get_payload_requests.lock().unwrap();
+            assert_eq!(builder_gp.len(), 1);
+            assert_eq!(builder_gp[0], external_id);
+        }
 
-        let l2_gp = l2_mock.get_payload_requests.lock().unwrap();
-        assert_eq!(l2_gp.len(), 1);
-        assert_eq!(l2_gp[0], local_id);
+        {
+            let l2_gp = l2_mock.get_payload_requests.lock().unwrap();
+            assert_eq!(l2_gp.len(), 1);
+            assert_eq!(l2_gp[0], local_id);
+        }
 
         test_harness.cleanup().await;
     }
