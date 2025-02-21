@@ -1,27 +1,27 @@
-use clap::{arg, Parser};
+use clap::{Parser, arg};
 use client::{BuilderArgs, ExecutionClient, L2ClientArgs};
 use std::{net::SocketAddr, sync::Arc};
 
 use dotenv::dotenv;
 use http::StatusCode;
 use hyper::service::service_fn;
-use hyper::{server::conn::http1, Request, Response};
+use hyper::{Request, Response, server::conn::http1};
 use hyper_util::rt::TokioIo;
+use jsonrpsee::RpcModule;
 use jsonrpsee::http_client::HttpBody;
 use jsonrpsee::server::Server;
-use jsonrpsee::RpcModule;
 use metrics::ServerMetrics;
 use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
 use metrics_util::layers::{PrefixLayer, Stack};
-use opentelemetry::{global, KeyValue};
+use opentelemetry::{KeyValue, global};
 use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::{propagation::TraceContextPropagator, Resource};
+use opentelemetry_sdk::{Resource, propagation::TraceContextPropagator};
 use proxy::ProxyLayer;
 use server::RollupBoostServer;
 
 use tokio::net::TcpListener;
-use tokio::signal::unix::{signal as unix_signal, SignalKind};
-use tracing::{error, info, Level};
+use tokio::signal::unix::{SignalKind, signal as unix_signal};
+use tracing::{Level, error, info};
 use tracing_subscriber::EnvFilter;
 
 mod client;
@@ -265,10 +265,10 @@ mod tests {
     use http::Uri;
     use jsonrpsee::core::client::ClientT;
 
+    use jsonrpsee::RpcModule;
+    use jsonrpsee::http_client::HttpClient;
     use jsonrpsee::http_client::transport::Error as TransportError;
     use jsonrpsee::http_client::transport::HttpBackend;
-    use jsonrpsee::http_client::HttpClient;
-    use jsonrpsee::RpcModule;
     use jsonrpsee::{
         core::ClientError,
         rpc_params,

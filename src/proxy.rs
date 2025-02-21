@@ -18,6 +18,7 @@ const MULTIPLEX_METHODS: [&str; 4] = [
     "eth_sendRawTransaction",
     "miner_",
 ];
+
 const FORWARD_REQUESTS: [&str; 6] = [
     "eth_sendRawTransaction",
     "eth_sendRawTransactionConditional",

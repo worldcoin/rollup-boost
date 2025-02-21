@@ -5,7 +5,7 @@ use alloy_rpc_types_engine::{
     ExecutionPayloadV3, ForkchoiceState, ForkchoiceUpdated, PayloadAttributes, PayloadId,
     PayloadStatus, PayloadStatusEnum,
 };
-use jsonrpsee::http_client::{transport::HttpBackend, HttpClient};
+use jsonrpsee::http_client::{HttpClient, transport::HttpBackend};
 use jsonrpsee::proc_macros::rpc;
 use op_alloy_rpc_types_engine::{OpExecutionPayloadEnvelopeV3, OpPayloadAttributes};
 use reth_rpc_layer::{AuthClientLayer, AuthClientService, JwtSecret};
@@ -21,7 +21,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 use thiserror::Error;
-use time::{format_description, OffsetDateTime};
+use time::{OffsetDateTime, format_description};
 use tokio::time::sleep;
 
 /// Default JWT token for testing purposes
@@ -358,7 +358,7 @@ impl EngineApi {
         let middleware = tower::ServiceBuilder::default().layer(secret_layer);
         let client = jsonrpsee::http_client::HttpClientBuilder::default()
             .set_http_middleware(middleware)
-            .build(&url)
+            .build(url)
             .expect("Failed to create http client");
 
         Ok(Self {

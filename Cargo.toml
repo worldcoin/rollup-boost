@@ -1,7 +1,7 @@
 [package]
 name = "rollup-boost"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 alloy-primitives = { version = "0.8.10", features = ["rand"] }
@@ -19,6 +19,7 @@ thiserror = "2.0.11"
 clap = { version = "4", features = ["derive", "env"] }
 jsonrpsee = { version = "0.24", features = ["server", "http-client", "macros"] }
 lru = "0.13.0"
+moka = { version = "0.12.10", features = ["sync"] }
 reqwest = "0.12.5"
 http = "1.1.0"
 dotenv = "0.15.0"
@@ -58,6 +59,7 @@ time = { version = "0.3.36", features = ["macros", "formatting", "parsing"] }
 futures-util = "0.3.31"
 
 [dev-dependencies]
+parking_lot = "0.12.3"
 anyhow = "1.0"
 assert_cmd = "2.0.10"
 predicates = "3.1.2"
