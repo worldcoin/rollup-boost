@@ -460,6 +460,66 @@ impl EngineApiServer for RollupBoostServer {
                 }
             })
     }
+
+    async fn get_payload_v4(
+        &self,
+        payload_id: PayloadId,
+    ) -> RpcResult<OpExecutionPayloadEnvelopeV4> {
+        info!(message = "received get_payload_v4", "payload_id" = %payload_id);
+        let l2_payload = self.l2_client.auth_client.get_payload_v4(payload_id);
+
+        let builder_payload = Box::pin(async move {
+            let builder = self.builder_client.clone();
+            let payload = builder.auth_client.get_payload_v4(payload_id).await.map_err(|e| {
+                error!(message = "error calling get_payload_v4 from builder", "url" = ?builder.auth_rpc, "error" = %e, "payload_id" = %payload_id);
+                e
+                })?;
+
+            let block_hash = ExecutionPayload::from(payload.clone().execution_payload).block_hash();
+            info!(message = "received payload from builder", "local_payload_id" = %payload_id, "block_hash" = %block_hash);
+
+            let payload_status = self.l2_client.auth_client.new_payload_v4(payload.execution_payload.clone(), vec![], payload.parent_beacon_block_root).await.map_err(|e| {
+                error!(message = "error calling new_payload_v3 to validate builder payload", "url" = ?self.l2_client.auth_rpc, "error" = %e, "local_payload_id" = %payload_id, "external_payload_id" = %external_payload_id);
+                e
+            })?;
+
+            if payload_status.is_invalid() {
+                error!(message = "builder payload was not valid", "url" = ?builder.auth_rpc, "payload_status" = %payload_status.status, "local_payload_id" = %payload_id);
+                Err(ClientError::Call(ErrorObject::owned(
+                    INVALID_REQUEST_CODE,
+                    "Builder payload was not valid",
+                    None::<String>,
+                )))
+            } else {
+                info!(message = "received payload status from local execution engine validating builder payload", "local_payload_id" = %payload_id, "external_payload_id" = %external_payload_id);
+                Ok(payload)
+            }
+        });
+
+        let (l2_payload, builder_payload) = tokio::join!(l2_payload, builder_payload);
+        builder_payload.or(l2_payload).map_err(|e| match e {
+            ClientError::Call(err) => err,
+            other_error => {
+                error!(
+                    message = "error calling get_payload_v4",
+                    builder_client.http_socket = ?self.builder_client.auth_rpc,
+                    "error" = %other_error,
+                    "payload_id" = %payload_id
+                );
+                ErrorCode::InternalError.into()
+            }
+        })
+    }
+
+    async fn new_payload_v4(
+        &self,
+        payload: OpExecutionPayloadV4,
+        versioned_hashes: Vec<B256>,
+        parent_beacon_block_root: B256,
+        execution_requests: Requests,
+    ) -> RpcResult<PayloadStatus> {
+        todo!()
+    }
 }
 
 #[cfg(test)]
