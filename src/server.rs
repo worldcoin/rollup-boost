@@ -478,8 +478,11 @@ impl EngineApiServer for RollupBoostServer {
             let block_hash = ExecutionPayload::from(payload.clone().execution_payload).block_hash();
             info!(message = "received payload from builder", "local_payload_id" = %payload_id, "block_hash" = %block_hash);
 
-            let payload_status = self.l2_client.auth_client.new_payload_v4(payload.execution_payload.clone(), vec![], payload.parent_beacon_block_root).await.map_err(|e| {
-                error!(message = "error calling new_payload_v3 to validate builder payload", "url" = ?self.l2_client.auth_rpc, "error" = %e, "local_payload_id" = %payload_id, "external_payload_id" = %external_payload_id);
+            let execution_requests = Requests::from(payload.execution_requests);
+
+            // TODO: check versioned hases
+            let payload_status = self.l2_client.auth_client.new_payload_v4(payload.into(), vec![], payload.parent_beacon_block_root, execution_requests).await.map_err(|e| {
+                error!(message = "error calling new_payload_v3 to validate builder payload", "url" = ?self.l2_client.auth_rpc, "error" = %e, "local_payload_id" = %payload_id);
                 e
             })?;
 
@@ -491,7 +494,7 @@ impl EngineApiServer for RollupBoostServer {
                     None::<String>,
                 )))
             } else {
-                info!(message = "received payload status from local execution engine validating builder payload", "local_payload_id" = %payload_id, "external_payload_id" = %external_payload_id);
+                info!(message = "received payload status from local execution engine validating builder payload", "local_payload_id" = %payload_id);
                 Ok(payload)
             }
         });
