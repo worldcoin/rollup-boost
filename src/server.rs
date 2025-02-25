@@ -1,5 +1,6 @@
 use crate::client::ExecutionClient;
 use crate::metrics::ServerMetrics;
+use alloy_eips::eip7685::Requests;
 use alloy_primitives::B256;
 use moka::sync::Cache;
 use std::sync::Arc;
@@ -12,7 +13,10 @@ use jsonrpsee::RpcModule;
 use jsonrpsee::core::{ClientError, RegisterMethodError, RpcResult, async_trait};
 use jsonrpsee::types::error::INVALID_REQUEST_CODE;
 use jsonrpsee::types::{ErrorCode, ErrorObject};
-use op_alloy_rpc_types_engine::{OpExecutionPayloadEnvelopeV3, OpPayloadAttributes};
+use op_alloy_rpc_types_engine::{
+    OpExecutionPayloadEnvelopeV3, OpExecutionPayloadEnvelopeV4, OpExecutionPayloadV4,
+    OpPayloadAttributes,
+};
 use opentelemetry::global::{self, BoxedSpan, BoxedTracer};
 use opentelemetry::trace::{Span, TraceContextExt, Tracer};
 use opentelemetry::{Context, KeyValue};
@@ -154,6 +158,21 @@ pub trait EngineApi {
         versioned_hashes: Vec<B256>,
         parent_beacon_block_root: B256,
     ) -> RpcResult<PayloadStatus>;
+
+    #[method(name = "newPayloadV4")]
+    async fn new_payload_v4(
+        &self,
+        payload: OpExecutionPayloadV4,
+        versioned_hashes: Vec<B256>,
+        parent_beacon_block_root: B256,
+        execution_requests: Requests,
+    ) -> RpcResult<PayloadStatus>;
+
+    #[method(name = "getPayloadV4")]
+    async fn get_payload_v4(
+        &self,
+        payload_id: PayloadId,
+    ) -> RpcResult<OpExecutionPayloadEnvelopeV4>;
 }
 
 #[async_trait]
