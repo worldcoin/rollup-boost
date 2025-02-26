@@ -2,7 +2,6 @@ use crate::client::ExecutionClient;
 use crate::metrics::ServerMetrics;
 use alloy_eips::eip7685::Requests;
 use alloy_primitives::B256;
-use alloy_rpc_types_eth::Block;
 use moka::sync::Cache;
 use op_alloy_consensus::OpTxEnvelope;
 use std::sync::Arc;
@@ -510,7 +509,7 @@ impl EngineApiServer for RollupBoostServer {
 
             let execution_requests = Requests::from(payload_envelope.execution_requests.clone());
             let payload_v4 = OpExecutionPayloadV4 {
-                payload_inner: ExecutionPayloadV3::from(payload_envelope.execution_payload.clone()),
+                payload_inner: payload_envelope.execution_payload.clone(),
                 withdrawals_root: withdrawals_root.unwrap_or_default(),
             };
 
