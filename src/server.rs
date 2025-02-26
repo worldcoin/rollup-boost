@@ -1,7 +1,9 @@
 use crate::client::ExecutionClient;
 use crate::metrics::ServerMetrics;
+use alloy_eips::eip7685::Requests;
 use alloy_primitives::B256;
 use moka::sync::Cache;
+use op_alloy_consensus::OpTxEnvelope;
 use std::sync::Arc;
 
 use alloy_rpc_types_engine::{
@@ -12,7 +14,10 @@ use jsonrpsee::RpcModule;
 use jsonrpsee::core::{ClientError, RegisterMethodError, RpcResult, async_trait};
 use jsonrpsee::types::error::INVALID_REQUEST_CODE;
 use jsonrpsee::types::{ErrorCode, ErrorObject};
-use op_alloy_rpc_types_engine::{OpExecutionPayloadEnvelopeV3, OpPayloadAttributes};
+use op_alloy_rpc_types_engine::{
+    OpExecutionPayloadEnvelopeV3, OpExecutionPayloadEnvelopeV4, OpExecutionPayloadV4,
+    OpPayloadAttributes,
+};
 use opentelemetry::global::{self, BoxedSpan, BoxedTracer};
 use opentelemetry::trace::{Span, TraceContextExt, Tracer};
 use opentelemetry::{Context, KeyValue};
@@ -154,6 +159,21 @@ pub trait EngineApi {
         versioned_hashes: Vec<B256>,
         parent_beacon_block_root: B256,
     ) -> RpcResult<PayloadStatus>;
+
+    #[method(name = "newPayloadV4")]
+    async fn new_payload_v4(
+        &self,
+        payload: OpExecutionPayloadV4,
+        versioned_hashes: Vec<B256>,
+        parent_beacon_block_root: B256,
+        execution_requests: Requests,
+    ) -> RpcResult<PayloadStatus>;
+
+    #[method(name = "getPayloadV4")]
+    async fn get_payload_v4(
+        &self,
+        payload_id: PayloadId,
+    ) -> RpcResult<OpExecutionPayloadEnvelopeV4>;
 }
 
 #[async_trait]
@@ -288,6 +308,7 @@ impl EngineApiServer for RollupBoostServer {
         Ok(l2_response)
     }
 
+    // TODO: update tracing, metrics, refactor
     async fn get_payload_v3(
         &self,
         payload_id: PayloadId,
@@ -371,6 +392,7 @@ impl EngineApiServer for RollupBoostServer {
         })
     }
 
+    // TODO: update tracing, metrics, refactor
     async fn new_payload_v3(
         &self,
         payload: ExecutionPayloadV3,
@@ -433,6 +455,178 @@ impl EngineApiServer for RollupBoostServer {
                 other_error => {
                     error!(
                         message = "error calling new_payload_v3",
+                        "url" = ?self.l2_client.auth_rpc,
+                        "error" = %other_error,
+                        "block_hash" = %block_hash
+                    );
+                    ErrorCode::InternalError.into()
+                }
+            })
+    }
+
+    // TODO: update tracing, metrics, refactor
+    async fn get_payload_v4(
+        &self,
+        payload_id: PayloadId,
+    ) -> RpcResult<OpExecutionPayloadEnvelopeV4> {
+        info!(message = "received get_payload_v4", "payload_id" = %payload_id);
+        let l2_payload = self.l2_client.auth_client.get_payload_v4(payload_id);
+
+        let builder_payload = Box::pin(async move {
+            if let Some(metrics) = &self.metrics {
+                metrics.get_payload_count.increment(1);
+            }
+            let parent_span = self
+                .payload_trace_context
+                .retrieve_by_payload_id(&payload_id);
+            let span = parent_span.clone().map(|span| {
+                self.payload_trace_context.tracer.start_with_context(
+                    "get_payload",
+                    &Context::current().with_remote_span_context(span.span_context().clone()),
+                )
+            });
+
+            let builder = self.builder_client.clone();
+            let payload_envelope = builder.auth_client.get_payload_v4(payload_id).await.map_err(|e| {
+                error!(message = "error calling get_payload_v4 from builder", "url" = ?builder.auth_rpc, "error" = %e, "payload_id" = %payload_id);
+                e
+                })?;
+
+            let block_hash =
+                ExecutionPayload::from(payload_envelope.execution_payload.clone()).block_hash();
+            info!(message = "received payload from builder", "local_payload_id" = %payload_id, "block_hash" = %block_hash);
+
+            if let Some(metrics) = &self.metrics {
+                metrics.new_payload_count.increment(1);
+            }
+
+            let withdrawals_root = payload_envelope
+                .execution_payload
+                .clone()
+                .try_into_block::<OpTxEnvelope>()
+                .expect("TODO: handle error")
+                .withdrawals_root;
+
+            let execution_requests = Requests::from(payload_envelope.execution_requests.clone());
+            let payload_v4 = OpExecutionPayloadV4 {
+                payload_inner: payload_envelope.execution_payload.clone(),
+                withdrawals_root: withdrawals_root.unwrap_or_default(),
+            };
+
+            let payload_status = self.l2_client.auth_client.new_payload_v4(payload_v4, vec![], payload_envelope.parent_beacon_block_root, execution_requests).await.map_err(|e| {
+                error!(message = "error calling new_payload_v4 to validate builder payload", "url" = ?self.l2_client.auth_rpc, "error" = %e, "local_payload_id" = %payload_id);
+                e
+            })?;
+
+            if let Some(mut s) = span {
+                s.end();
+            };
+            if let Some(mut parent) = parent_span {
+                let parent = Arc::get_mut(&mut parent);
+                if let Some(parent) = parent {
+                    parent.end();
+                }
+            };
+
+            if payload_status.is_invalid() {
+                error!(message = "builder payload was not valid", "url" = ?builder.auth_rpc, "payload_status" = %payload_status.status, "local_payload_id" = %payload_id);
+                Err(ClientError::Call(ErrorObject::owned(
+                    INVALID_REQUEST_CODE,
+                    "Builder payload was not valid",
+                    None::<String>,
+                )))
+            } else {
+                info!(message = "received payload status from local execution engine validating builder payload", "local_payload_id" = %payload_id);
+                Ok(payload_envelope)
+            }
+        });
+
+        let (l2_payload, builder_payload) = tokio::join!(l2_payload, builder_payload);
+        builder_payload.or(l2_payload).map_err(|e| match e {
+            ClientError::Call(err) => err,
+            other_error => {
+                error!(
+                    message = "error calling get_payload_v4",
+                    builder_client.http_socket = ?self.builder_client.auth_rpc,
+                    "error" = %other_error,
+                    "payload_id" = %payload_id
+                );
+                ErrorCode::InternalError.into()
+            }
+        })
+    }
+
+    // TODO: update tracing, metrics, refactor
+    async fn new_payload_v4(
+        &self,
+        payload: OpExecutionPayloadV4,
+        versioned_hashes: Vec<B256>,
+        parent_beacon_block_root: B256,
+        execution_requests: Requests,
+    ) -> RpcResult<PayloadStatus> {
+        let execution_payload = ExecutionPayload::from(payload.payload_inner.clone());
+        let block_hash = execution_payload.block_hash();
+        let parent_hash = execution_payload.parent_hash();
+        info!(message = "received new_payload_v4", "block_hash" = %block_hash);
+
+        // async call to builder to sync the builder node
+        if self.boost_sync {
+            if let Some(metrics) = &self.metrics {
+                metrics.new_payload_count.increment(1);
+            }
+            let parent_spans = self
+                .payload_trace_context
+                .retrieve_by_parent_hash(&parent_hash);
+            let spans: Option<Vec<BoxedSpan>> = parent_spans.as_ref().map(|spans| {
+                spans
+                    .iter()
+                    .map(|span| {
+                        self.payload_trace_context.tracer.start_with_context(
+                            "new_payload",
+                            &Context::current()
+                                .with_remote_span_context(span.span_context().clone()),
+                        )
+                    })
+                    .collect()
+            });
+            self.payload_trace_context
+                .remove_by_parent_hash(&parent_hash);
+
+            let builder = self.builder_client.clone();
+            let builder_payload = payload.clone();
+            let builder_versioned_hashes = versioned_hashes.clone();
+            let builder_execution_requests = execution_requests.clone();
+            tokio::spawn(async move {
+                let _ = builder.auth_client.new_payload_v4(builder_payload, builder_versioned_hashes, parent_beacon_block_root, builder_execution_requests).await
+                .map(|response: PayloadStatus| {
+                    if response.is_invalid() {
+                        error!(message = "builder rejected new_payload_v4", "url" = ?builder.auth_rpc, "block_hash" = %block_hash);
+                    } else {
+                        info!(message = "called new_payload_v4 to builder", "url" = ?builder.auth_rpc, "payload_status" = %response.status, "block_hash" = %block_hash);
+                    }
+                }).map_err(|e| {
+                    error!(message = "error calling new_payload_v4 to builder", "url" = ?builder.auth_rpc, "error" = %e, "block_hash" = %block_hash);
+                    e
+                });
+                if let Some(mut spans) = spans {
+                    spans.iter_mut().for_each(|s| s.end());
+                };
+            });
+        }
+        self.l2_client
+            .auth_client
+            .new_payload_v4(
+                payload,
+                versioned_hashes,
+                parent_beacon_block_root,
+                execution_requests,
+            )
+            .await
+            .map_err(|e| match e {
+                ClientError::Call(err) => err,
+                other_error => {
+                    error!(
+                        message = "error calling new_payload_v4",
                         "url" = ?self.l2_client.auth_rpc,
                         "error" = %other_error,
                         "block_hash" = %block_hash
