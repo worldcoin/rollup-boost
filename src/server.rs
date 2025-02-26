@@ -2,7 +2,9 @@ use crate::client::ExecutionClient;
 use crate::metrics::ServerMetrics;
 use alloy_eips::eip7685::Requests;
 use alloy_primitives::B256;
+use alloy_rpc_types_eth::Block;
 use moka::sync::Cache;
+use op_alloy_consensus::OpTxEnvelope;
 use std::sync::Arc;
 
 use alloy_rpc_types_engine::{
@@ -470,18 +472,30 @@ impl EngineApiServer for RollupBoostServer {
 
         let builder_payload = Box::pin(async move {
             let builder = self.builder_client.clone();
-            let payload = builder.auth_client.get_payload_v4(payload_id).await.map_err(|e| {
+            let payload_envelope = builder.auth_client.get_payload_v4(payload_id).await.map_err(|e| {
                 error!(message = "error calling get_payload_v4 from builder", "url" = ?builder.auth_rpc, "error" = %e, "payload_id" = %payload_id);
                 e
                 })?;
 
-            let block_hash = ExecutionPayload::from(payload.clone().execution_payload).block_hash();
+            let block_hash =
+                ExecutionPayload::from(payload_envelope.execution_payload.clone()).block_hash();
             info!(message = "received payload from builder", "local_payload_id" = %payload_id, "block_hash" = %block_hash);
 
-            let execution_requests = Requests::from(payload.execution_requests);
+            let withdrawals_root = payload_envelope
+                .execution_payload
+                .clone()
+                .try_into_block::<OpTxEnvelope>()
+                .expect("TODO: handle error")
+                .withdrawals_root;
 
-            // TODO: check versioned hases
-            let payload_status = self.l2_client.auth_client.new_payload_v4(payload.into(), vec![], payload.parent_beacon_block_root, execution_requests).await.map_err(|e| {
+            let execution_requests = Requests::from(payload_envelope.execution_requests.clone());
+            let payload_v4 = OpExecutionPayloadV4 {
+                payload_inner: ExecutionPayloadV3::from(payload_envelope.execution_payload.clone()),
+                withdrawals_root: withdrawals_root.unwrap_or_default(),
+            };
+
+            // TODO: check versioned hashes
+            let payload_status = self.l2_client.auth_client.new_payload_v4(payload_v4, vec![], payload_envelope.parent_beacon_block_root, execution_requests).await.map_err(|e| {
                 error!(message = "error calling new_payload_v3 to validate builder payload", "url" = ?self.l2_client.auth_rpc, "error" = %e, "local_payload_id" = %payload_id);
                 e
             })?;
@@ -495,7 +509,7 @@ impl EngineApiServer for RollupBoostServer {
                 )))
             } else {
                 info!(message = "received payload status from local execution engine validating builder payload", "local_payload_id" = %payload_id);
-                Ok(payload)
+                Ok(payload_envelope)
             }
         });
 
