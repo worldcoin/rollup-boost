@@ -309,6 +309,7 @@ impl EngineApiServer for RollupBoostServer {
         Ok(l2_response)
     }
 
+    // TODO: update tracing, metrics, refactor
     async fn get_payload_v3(
         &self,
         payload_id: PayloadId,
@@ -392,6 +393,7 @@ impl EngineApiServer for RollupBoostServer {
         })
     }
 
+    // TODO: update tracing, metrics, refactor
     async fn new_payload_v3(
         &self,
         payload: ExecutionPayloadV3,
