@@ -1,4 +1,4 @@
-use crate::integration::{poll_logs, Arg, IntegrationError, Service, ServiceCommand};
+use crate::integration::{Arg, IntegrationError, Service, ServiceCommand, poll_logs};
 use futures_util::Future;
 use std::{
     path::{Path, PathBuf},
