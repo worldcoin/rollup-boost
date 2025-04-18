@@ -7,10 +7,13 @@ use hyper_util::rt::TokioExecutor;
 use jsonrpsee::core::{BoxError, http_helpers};
 use jsonrpsee::http_client::{HttpBody, HttpRequest, HttpResponse};
 use reth_rpc_layer::{JwtSecret, secret_to_bearer_header};
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::{future::Future, pin::Pin};
 use tower::{Layer, Service};
 use tracing::{debug, error, info};
+
+use crate::metrics::ServerMetrics;
 
 const MULTIPLEX_METHODS: [&str; 4] = [
     "engine_",
@@ -34,6 +37,7 @@ pub struct ProxyLayer {
     l2_http_secret: Option<JwtSecret>,
     builder_http_uri: Uri,
     builder_http_secret: Option<JwtSecret>,
+    metrics: Option<Arc<ServerMetrics>>,
 }
 
 impl ProxyLayer {
@@ -42,12 +46,14 @@ impl ProxyLayer {
         l2_http_secret: Option<JwtSecret>,
         builder_http_uri: Uri,
         builder_http_secret: Option<JwtSecret>,
+        metrics: Option<Arc<ServerMetrics>>
     ) -> Self {
         ProxyLayer {
             l2_http_uri,
             l2_http_secret,
             builder_http_uri,
             builder_http_secret,
+            metrics
         }
     }
 }
@@ -71,6 +77,7 @@ impl<S> Layer<S> for ProxyLayer {
             l2_http_secret: self.l2_http_secret,
             builder_http_uri: self.builder_http_uri.clone(),
             builder_http_secret: self.builder_http_secret,
+            metrics: self.metrics.clone(),
         }
     }
 }
@@ -83,6 +90,7 @@ pub struct ProxyService<S> {
     l2_http_secret: Option<JwtSecret>,
     builder_http_uri: Uri,
     builder_http_secret: Option<JwtSecret>,
+    metrics: Option<Arc<ServerMetrics>>,
 }
 
 impl<S> Service<HttpRequest<HttpBody>> for ProxyService<S>
@@ -112,13 +120,14 @@ where
         let builder_secret = self.builder_http_secret;
         let l2_uri = self.l2_http_uri.clone();
         let l2_secret = self.l2_http_secret;
+        let metrics = self.metrics.clone();
 
         #[derive(serde::Deserialize, Debug)]
         struct RpcRequest<'a> {
             #[serde(borrow)]
             method: &'a str,
         }
-
+        
         let fut = async move {
             let (parts, body) = req.into_parts();
             let (body_bytes, _) = http_helpers::read_body(&parts.headers, body, u32::MAX).await?;
@@ -147,15 +156,22 @@ where
                             let _ =
                                 forward_request(client, l2_req, &method, l2_uri, l2_secret).await;
                         });
-
-                        forward_request(
+                        let now = std::time::Instant::now();
+                        let resp = forward_request(
                             builder_client,
                             builder_req,
                             &builder_method,
                             builder_uri,
                             builder_secret,
                         )
-                        .await
+                        .await;
+
+                        if let Some(metrics) = metrics.as_ref() {
+                            metrics.builder_response_time.record(
+                                now.elapsed().as_secs_f64(),
+                            );
+                        }
+                        resp
                     } else {
                         tokio::spawn(async move {
                             let _ = forward_request(
@@ -282,6 +298,7 @@ mod tests {
                 None,
                 format!("http://{}:{}", builder.addr.ip(), builder.addr.port()).parse::<Uri>()?,
                 None,
+                None
             ));
 
             let temp_listener = TcpListener::bind("0.0.0.0:0").await?;
@@ -533,7 +550,7 @@ mod tests {
         .parse::<Uri>()
         .unwrap();
 
-        let proxy_layer = ProxyLayer::new(l2_auth_uri.clone(), None, l2_auth_uri, None);
+        let proxy_layer = ProxyLayer::new(l2_auth_uri.clone(), None, l2_auth_uri, None, None);
 
         // Create a layered server
         let server = ServerBuilder::default()
