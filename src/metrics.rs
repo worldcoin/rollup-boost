@@ -1,4 +1,4 @@
-use metrics::{histogram, Counter, Histogram};
+use metrics::{Counter, Histogram, histogram};
 use metrics_derive::Metrics;
 
 #[derive(Metrics)]

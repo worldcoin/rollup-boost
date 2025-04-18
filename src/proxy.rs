@@ -46,14 +46,14 @@ impl ProxyLayer {
         l2_http_secret: Option<JwtSecret>,
         builder_http_uri: Uri,
         builder_http_secret: Option<JwtSecret>,
-        metrics: Option<Arc<ServerMetrics>>
+        metrics: Option<Arc<ServerMetrics>>,
     ) -> Self {
         ProxyLayer {
             l2_http_uri,
             l2_http_secret,
             builder_http_uri,
             builder_http_secret,
-            metrics
+            metrics,
         }
     }
 }
@@ -127,7 +127,7 @@ where
             #[serde(borrow)]
             method: &'a str,
         }
-        
+
         let fut = async move {
             let (parts, body) = req.into_parts();
             let (body_bytes, _) = http_helpers::read_body(&parts.headers, body, u32::MAX).await?;
@@ -167,9 +167,9 @@ where
                         .await;
 
                         if let Some(metrics) = metrics.as_ref() {
-                            metrics.builder_response_time.record(
-                                now.elapsed().as_secs_f64(),
-                            );
+                            metrics
+                                .builder_response_time
+                                .record(now.elapsed().as_secs_f64());
                         }
                         resp
                     } else {
@@ -298,7 +298,7 @@ mod tests {
                 None,
                 format!("http://{}:{}", builder.addr.ip(), builder.addr.port()).parse::<Uri>()?,
                 None,
-                None
+                None,
             ));
 
             let temp_listener = TcpListener::bind("0.0.0.0:0").await?;

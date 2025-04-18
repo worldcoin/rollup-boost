@@ -154,7 +154,8 @@ async fn main() -> eyre::Result<()> {
         builder_args.builder_timeout,
     )?;
 
-    let rollup_boost = RollupBoostServer::new(l2_client, builder_client, args.boost_sync, metrics.clone());
+    let rollup_boost =
+        RollupBoostServer::new(l2_client, builder_client, args.boost_sync, metrics.clone());
 
     let module: RpcModule<()> = rollup_boost.try_into()?;
 
@@ -169,7 +170,7 @@ async fn main() -> eyre::Result<()> {
         l2_http_jwt,
         builder_args.builder_http_url,
         builder_http_jwt,
-        metrics
+        metrics,
     ));
 
     let server = Server::builder()
