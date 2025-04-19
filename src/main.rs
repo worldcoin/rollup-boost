@@ -122,7 +122,7 @@ async fn main() -> eyre::Result<()> {
         let addr: SocketAddr = metrics_addr.parse()?;
         tokio::spawn(init_metrics_server(addr, handle)); // Run the metrics server in a separate task
 
-        Some(Arc::new(ServerMetrics::default()))
+        Some(Arc::new(ServerMetrics::new()))
     } else {
         None
     };
@@ -154,7 +154,8 @@ async fn main() -> eyre::Result<()> {
         builder_args.builder_timeout,
     )?;
 
-    let rollup_boost = RollupBoostServer::new(l2_client, builder_client, args.boost_sync, metrics);
+    let rollup_boost =
+        RollupBoostServer::new(l2_client, builder_client, args.boost_sync, metrics.clone());
 
     let module: RpcModule<()> = rollup_boost.try_into()?;
 
@@ -169,6 +170,7 @@ async fn main() -> eyre::Result<()> {
         l2_http_jwt,
         builder_args.builder_http_url,
         builder_http_jwt,
+        metrics,
     ));
 
     let server = Server::builder()
